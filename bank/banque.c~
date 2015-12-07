@@ -1,0 +1,33 @@
+/* ------------------------------------------
+ * Project: La banque de Grütschli
+ * Authors: Poroli Fiorenzo
+ * Version: 1.0, 2015-11-18
+ * ------------------------------------------*/
+
+#ifndef __BANQUE_H__
+#define __BANQUE_H__
+
+#include "banque.h"
+
+/**
+ * @brief Function ...
+ * @param ...
+ * @param ...
+ * @param ...
+ */
+void banque() { // à completer
+
+}
+
+/** 
+ * @brief Function ..
+ * @param ...
+ * @param ...
+ * @param ...
+ */
+void client() {
+
+}
+
+
+#endif
