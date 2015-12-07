@@ -9,7 +9,7 @@
 #include <pthread.h>
 #include "bank/bank.h"
 
-#define ARGC_MIN 3
+#define ARGC_MIN 4
 
 int main(int argc, char **argv) {
 
@@ -56,9 +56,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-
-	while(!(pthread_join(threads_banker[0], NULL) != 0)) {}
-	
+	pthread_join(threads_banker, NULL); // infini car il ne s'arrete pas ...
 	
 	return EXIT_SUCCESS;
 }
