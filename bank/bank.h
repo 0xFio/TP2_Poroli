@@ -31,6 +31,7 @@ typedef struct customer customer_t;
 struct customer
 {
 	place my_place;
+	pthread_mutex_t mu_my_place;
 	uint my_ticket;
 	customer_t *next_customer;
 	sem_t be_served;
@@ -45,6 +46,8 @@ struct file
 {
 	customer_t *first_customer_served;
 	pthread_mutex_t mu_file;
+	sem_t sem_file;
+	//int test;
 };
 
 
@@ -59,7 +62,7 @@ typedef struct banker_st {
 	sem_t waiting_room;
 
 	file_t *file;
-	customer_t *customer;
+	//customer_t *customer;
 	int d1;
 	int d0;
 	double p;

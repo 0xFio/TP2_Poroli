@@ -27,9 +27,16 @@ bool init_banker(banker_t* b, file_t* f, int d1, double p) {
 		printf("erroorr");
 	}
 
+
 	b->file = f;
 	b->file->first_customer_served = NULL;
-	b->customer = NULL;
+
+	if (sem_init(&b->file->sem_file, 0, 1)) {
+		printf("error initialisation du banquier");
+	}
+	//b->file->test = 120;
+
+	//b->customer = NULL;
 	b->p = p;
 	b->d1 = d1;
 	b->d0 = 10*d1;
@@ -44,7 +51,7 @@ bool init_banker(banker_t* b, file_t* f, int d1, double p) {
  */
 customer_t* add_customer(file_t *file) {
 
-	customer_t *new_customer = malloc(sizeof(*new_customer));
+	customer_t *new_customer = malloc(sizeof(customer_t));
 	if (file == NULL || new_customer == NULL) {
 		printf("Erreur dans l'ajout d'un client\n");
 		exit(EXIT_FAILURE);
@@ -56,9 +63,14 @@ customer_t* add_customer(file_t *file) {
 
 	new_customer->my_place = BANK;
 
+	
+//printf("%d --- ", file->test);
+
+	sem_wait(&file->sem_file);
+
 	pthread_mutex_lock(&mu_ticket_tot);	// prendre le dernier ticket
-		ticket_tot++;
-		new_customer->my_ticket = ticket_tot;
+	ticket_tot++;
+	new_customer->my_ticket = ticket_tot;
 	pthread_mutex_unlock(&mu_ticket_tot);
 
 	pthread_mutex_lock(&file->mu_file);		// Se placer en dernier de la file
@@ -73,9 +85,12 @@ customer_t* add_customer(file_t *file) {
 	}
 	else {
 		file->first_customer_served = new_customer;
-		file->first_customer_served->next_customer = NULL;
+		new_customer->next_customer = NULL; //file->first_customer_served-
 	}
 	pthread_mutex_unlock(&file->mu_file);
+
+	sem_post(&file->sem_file);
+
 
 	return new_customer;
 }
@@ -88,12 +103,14 @@ customer_t* add_customer(file_t *file) {
 void* customer_threads(void* b) {
 
 	uint activity = 0; 	// pour l'activité d1*(my_ticket - t_servie)
+	uint my_ticket = 0;
 
 	banker_t* banker = (banker_t*) b;
-	customer_t* customer = (customer_t*) banker->customer; 
+	customer_t *customer;
+	//customer_t* customer = (customer_t*) banker->customer; 
 
 	while(true) {
-		take_new_ticket:	// !! pour le retour du GOTO !!
+		take_new_ticket:	// !! Retour du GOTO !!
 
 		sleep(banker->d0);
 		customer = add_customer(banker->file);
@@ -103,19 +120,27 @@ void* customer_threads(void* b) {
 			pthread_mutex_unlock(&banker->mu_ticket_served);
 
 			if (random_n() < banker->p) {
+		
+				my_ticket = customer->my_ticket;
 
-				printf("  %d : Je suis sortie un moment \n", customer->my_ticket);
+			//	printf("  %d : Je suis sortie un moment \n", customer->my_ticket);
 				customer->my_place = OUTSIDE;
 				pthread_mutex_lock(&banker->mu_ticket_served);
 				activity = customer->my_ticket - banker->ticket_served;
 				pthread_mutex_unlock(&banker->mu_ticket_served);
 				sleep(banker->d1*activity);
 				// le client revient à la banque contrôler si son ticket est passé
+				pthread_mutex_lock(&customer->mu_my_place);
+				//if (
 				customer->my_place = BANK;
+				pthread_mutex_unlock(&customer->mu_my_place);
+
+
 				pthread_mutex_lock(&banker->mu_ticket_served);
-				if (banker->ticket_served > customer->my_ticket) {
+				if (banker->ticket_served > my_ticket) {			// un problème dans cette zone !!!
 					pthread_mutex_unlock(&banker->mu_ticket_served);
 					printf("  Mince je dois prendre un nouveau ticket\n");
+					free(customer);
 					goto take_new_ticket;
 				}
 			}
@@ -123,6 +148,7 @@ void* customer_threads(void* b) {
 		pthread_mutex_unlock(&banker->mu_ticket_served);
 		sem_post(&banker->waiting_room);
 		sem_wait(&customer->be_served);
+		free(customer);
 	}
 }
 
@@ -134,11 +160,14 @@ void* customer_threads(void* b) {
 void served_first_customer(banker_t *b) {
 
 	banker_t* banker = (banker_t*) b;
+	customer_t *customer_served;
 
-	sem_post(&banker->file->first_customer_served->be_served);
-	printf("ticket n° %d servie  \n", banker->file->first_customer_served->my_ticket); 
+	customer_served = banker->file->first_customer_served;
+	
+	printf("n° %d servie  \n", customer_served->my_ticket); 
 	sleep(banker->d1);
 	delete_first_customer(banker->file);
+	sem_post(&customer_served->be_served);
 
 }
 
@@ -157,7 +186,7 @@ void delete_first_customer(file_t *file) {
 	if (file->first_customer_served != NULL) {
 		customer_t *customer_served = file->first_customer_served;
 		file->first_customer_served = customer_served->next_customer;
-		free(customer_served);
+		//free(customer_served);
 	}
 	pthread_mutex_unlock(&file->mu_file);
 }
@@ -183,11 +212,13 @@ void* banker_threads(void* b) {
 		pthread_mutex_lock(&mu_ticket_tot);
 		if (banker->ticket_served <= ticket_tot) { // verifiaction si il y a un ou des clients
 			pthread_mutex_unlock(&mu_ticket_tot);			
-			
+			pthread_mutex_lock(&banker->file->first_customer_served->mu_my_place);
 			if (banker->file->first_customer_served->my_place == BANK) { // verifie si le client est à la banque 
+				pthread_mutex_unlock(&banker->file->first_customer_served->mu_my_place);
 				served_first_customer(banker);// servir le client
 			}
 			else { // client absent de la banque
+				pthread_mutex_unlock(&banker->file->first_customer_served->mu_my_place);
 				printf("Ticket n°%d n'est pas à la banque\n", banker->file->first_customer_served->my_ticket);
 				delete_first_customer(banker->file);
 			}
@@ -215,9 +246,9 @@ void erreur_input_arg() {
 
 	printf("Erreur d'écriture : \n");
 	printf("./townGrutschli nbr_people val_d1 val_p \n");
-	printf("nbr_people = population (int)\n");
-	printf("val_d1 = valeur d'attentes passives (int)\n");
-	printf("val_p = valeur de probabilité pour rester dans la banque (double entre 0 et 1)\n");
+	printf("nbr_people = population (int) / minimum 1\n");
+	printf("val_d1 = valeur d'attentes passives (int) / minimum 1\n");
+	printf("val_p = valeur de probabilité pour rester dans la banque / double entre 0 et 1\n");
 	printf("\n");
 }
 

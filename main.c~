@@ -9,7 +9,7 @@
 #include <pthread.h>
 #include "bank/bank.h"
 
-#define ARGC_MIN 4
+#define ARGC_MIN 3
 
 int main(int argc, char **argv) {
 
@@ -17,17 +17,25 @@ int main(int argc, char **argv) {
 		erreur_input_arg();
 		return EXIT_SUCCESS;
 	}
-	uint nbr_people = atoi(argv[1]);
-	uint val_d1 = atoi(argv[2]);
-	double val_p = atof(argv[3]); 
+	const uint nbr_people = atoi(argv[1]);
+	const uint val_d1 = atoi(argv[2]);
+	const double val_p = atof(argv[3]); 
 
 	if (val_p > 1.0) {
 		erreur_input_arg();
 		return EXIT_SUCCESS;
-	}		
+	}
+	if (nbr_people == 0) {
+		erreur_input_arg();
+		return EXIT_SUCCESS;
+	}
+	if (val_d1 == 0) {
+		erreur_input_arg();
+		return EXIT_SUCCESS;
+	}
+	
 
-	ticket_tot = 0;
-
+	ticket_tot = 0; // init du ticket total
 
 	file_t *file = malloc(sizeof(*file));
 	if (file == NULL) {
@@ -56,7 +64,11 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	pthread_join(threads_banker, NULL); // infini car il ne s'arrete pas ...
-	
+	// controle si le thread naker se finit, normalement jamais
+	//pthread_join(*threads_banker, NULL);
+	while (1);
+	// ne vient jamais ici
+	printf("Erreur ! Fin du programme\n");
+
 	return EXIT_SUCCESS;
 }
